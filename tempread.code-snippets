@@ -15,6 +15,9 @@
 			"\tif(t<0)putchar('-'),t=-t;",
 			"\tif(t>9)write(t/10);",
 			"\tputchar(t%10+'0');",
+			"}",
+			"int main(){",
+			"\treturn 0;",
 			"}"
 		],
 		"description": "temp I/O"
