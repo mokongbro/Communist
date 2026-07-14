@@ -1,0 +1,22 @@
+{
+		"Print to console": {
+		"scope": "cpp",
+		"prefix": "tempread",
+		"body": [
+			"#include<stdio.h>",
+			"template<typename T=__int128>",
+			"inline T read(){T t{};bool f=0;char c=getchar();",
+			"\twhile(c<'0'||c>'9')f=c=='-',c=getchar();",
+			"\twhile(!(c<'0'||c>'9'))t*=10,t+=c-'0',c=getchar();",
+			"\treturn f?-t:t;",
+			"}",
+			"template<typename T>",
+			"inline void write(T t){",
+			"\tif(t<0)putchar('-'),t=-t;",
+			"\tif(t>9)write(t/10);",
+			"\tputchar(t%10+'0');",
+			"}"
+		],
+		"description": "temp I/O"
+	}
+}
