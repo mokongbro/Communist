@@ -420,6 +420,22 @@ namespace std{
 		return x;
 	}
 }
+template<typename T>
+inline Poly<T>Deri(Poly<T>p){
+	if(p.dt.size()==1){p.dt[0]={};return p;}
+	for(size_t i=1;i<p.dt.size();i++)p.dt[i-1]=p.dt[i]*T(i);
+	p.dt.pop_back();
+	p.reload();
+	return p;
+}
+template<typename T>
+inline Poly<T>inter(Poly<T>p){
+	p.dt.push_back({});
+	for(size_t i=p.dt.size()-1;i--;)p.dt[i+1]=p.dt[i]/T(i+1);
+	p.dt[0]={};
+	p.reload();
+	return p;
+}
 template<typename T=__int128>
 inline Bint<T>readBint(){
 	std::string s{};
