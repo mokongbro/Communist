@@ -281,6 +281,8 @@ class Poly{
 	public:
 	std::vector<T>dt;
 	void assign(size_t _n,const T&x){dt.assign(_n,x);}
+	T&operator[](size_t i){return dt[i];}
+	const T&operator[](size_t i)const{return dt[i];}
 	auto begin(){return dt.begin();}
 	auto end(){return dt.end();}
 	auto begin()const{return dt.begin();}
@@ -301,6 +303,11 @@ class Poly{
 	void reload(){
 		while(!dt.empty()&&zero(dt.back()))dt.pop_back();
 		if(dt.empty())dt.push_back({});
+	}
+	T operator()(T x)const{
+		T r{};
+		for(size_t i=dt.size();i--;)r=r*x+dt[i];
+		return r;
 	}
 	friend Poly operator+(const Poly&a,const Poly&b){
 		Poly t{};
@@ -439,11 +446,75 @@ inline Poly<T>inter(Poly<T>p){
 template<typename T=__int128>
 inline Bint<T>readBint(){
 	std::string s{};
-	char c{(char)getchar()};
-	while(c!=EOF&&(c<'0'||c>'9')&&c!='-')c=(char)getchar();
-	if(c=='-'){s+='-';c=(char)getchar();}
-	while(c!=EOF&&!(c<'0'||c>'9')){s+=c;c=(char)getchar();}
+	char c{getchar()};
+	while(c!=EOF&&(c<'0'||c>'9')&&c!='-')c=getchar();
+	if(c=='-'){s+='-';c=getchar();}
+	while(c!=EOF&&!(c<'0'||c>'9')){s+=c;c=getchar();}
 	return Bint<T>{s};
+}
+template<typename T>
+inline __int128 isread(Bint<T>&t){
+	bool f=0;char c=getchar();
+	while(c!=EOF&&(c<'0'||c>'9')){f=c=='-';c=getchar();}
+	if(c==EOF)return -1;
+	std::string s{};
+	while(c!=EOF&&!(c<'0'||c>'9')){s+=c;c=getchar();}
+	ungetc(c,stdin);
+	if(s.empty())return -1;
+	t=Bint<T>{(f?"-":"")+s};
+	return 1;
+}
+template<typename T>
+inline __int128 isread(Frac<T>&t){
+	auto from_str=[](const std::string&s){
+		if constexpr(std::is_same_v<T,long double>)return std::stold(s);
+		else return T{s};
+	};
+	char c{(char)getchar()};
+	while(c!=EOF&&(c<'0'||c>'9')&&c!='-'&&c!='.')c=getchar();
+	if(c==EOF)return -1;
+	bool neg=0;
+	if(c=='-'){
+		neg=1;
+		c=getchar();
+	}
+	if(c==EOF)return -1;
+	std::string ip{},fp{},dp{};
+	if(c!='.'){
+		while(c!=EOF&&!(c<'0'||c>'9')){ip+=c;c=getchar();}
+	}
+	if(c=='.'){
+		c=getchar();
+		while(c!=EOF&&!(c<'0'||c>'9')){fp+=c;c=getchar();}
+	}
+	if(c=='/'){
+		c=getchar();
+		while(c!=EOF&&!(c<'0'||c>'9')){dp+=c;c=getchar();}
+	}
+	if(c!=EOF)ungetc(c,stdin);
+	if(ip.empty()&&fp.empty())return -1;
+	if(ip.empty())ip="0";
+	T num{from_str(ip+fp)},den{1};
+	for(size_t i=0;i<fp.size();i++)den*=10;
+	if(!dp.empty())den*=from_str(dp);
+	t=Frac<T>{neg?-num:num,den};
+	return 1;
+}
+template<typename T>
+inline __int128 isread(Poly<T>&p){
+	std::vector<T>v{};
+	while(true){
+		char c=getchar();
+		while(c!=EOF&&c!='\n'&&(c<'0'||c>'9')&&c!='-'&&c!='.')c=getchar();
+		if(c==EOF||c=='\n')break;
+		ungetc(c,stdin);
+		T t{};
+		if(isread(t)==-1)break;
+		v.push_back(std::move(t));
+	}
+	if(v.empty())return -1;
+	p.dt=std::move(v);
+	return 1;
 }
 template<typename T>
 inline void write(const Bint<T>&t){
@@ -477,4 +548,13 @@ inline void write(const Frac<T>&t){
 			putchar('0'+dig[i<dig.size()?i:st+(i-st)%L]);
 		putchar('.');putchar('.');putchar('.');
 	}
+}
+template<typename T>
+inline void write(const Poly<T>&p){
+	putchar('P');putchar('{');
+	for(size_t i=0;i<p.dt.size();i++){
+		if(i)putchar(',');
+		write(p.dt[i]);
+	}
+	putchar('}');
 }
