@@ -41,7 +41,7 @@ FPTP T trunc(const T&x){
 	if constexpr(is_same_v<T,__float128>){
 		if(x<0)return -trunc(-x);
 		if(x>=1e38)return x;
-		return static_cast<__float128>(static_cast<i128>(x));
+		return static_cast<i128>(x);
 	}else return std::trunc(x);
 }
 FPTP T mod(const T&a,const T&b){return a-b*trunc(a/b);}
@@ -60,7 +60,9 @@ FPTP T num(const string&s){
 }
 }
 FPTP WO operator<=>(const cx<T>&a,const cx<T>&b){
-	T x{fpf::cabs(a)},y{fpf::cabs(b)};
+	T x{},y{};
+	if constexpr(fpt<T>)x=fpf::cabs(a),y=fpf::cabs(b);
+	else x=a.real()*a.real()+a.imag()*a.imag(),y=b.real()*b.real()+b.imag()*b.imag();
 	return x<y?WO::less:x>y?WO::greater:WO::equivalent;
 }
 FPTP WO operator<=>(const cx<T>&a,const typename cx<T>::value_type&b){return a<=>cx<T>{b};}
@@ -76,7 +78,7 @@ class Bint{
 	Bint():dt{0},sig{}{}
 	Bint(const T&t):dt{},sig{t<0}{
 		i128 x{t<0?-static_cast<i128>(t):static_cast<i128>(t)};
-		put(*this,static_cast<u128>(x));
+		put(*this,x);
 	}
 	Bint(const string&s):dt{},sig{}{
 		Z n{s.size()},d{};
@@ -107,15 +109,20 @@ class Bint{
 		x=(static_cast<u128>(q[3]*4294967296ull+q[2])<<64)|(q[1]*4294967296ull+q[0]);
 		return r;
 	}
-	static u64 divbase(u128&x){
-		u64 d0{div9(x)};
-		u64 d1{div9(x)};
-		return d0+d1*1000000000ull;
+	static constexpr u128 MU{~static_cast<u128>(0)/E18};
+	static u128 bd(u128 x,u64&r){
+		u64 lo=x,hi=x>>64;
+		u128 t{static_cast<u128>(lo)*static_cast<u64>(MU>>64)+static_cast<u128>(hi)*static_cast<u64>(MU)+(static_cast<u128>(lo)*static_cast<u64>(MU)>>64)};
+		u128 q{static_cast<u128>(hi)*static_cast<u64>(MU>>64)+(t>>64)};
+		u128 rem{x-q*E18};
+		if(rem>=E18)q++,rem-=E18;
+		r=rem;
+		return q;
 	}
 	static void put(Bint&t,u128 x){
 		t.dt.clear();
 		if(!(x>>64)){u64 y=x;do{t.dt.push_back((y%E18));y/=E18;}while(y);}
-		else do{t.dt.push_back(divbase(x));}while(x);
+		else do{u64 rr{};x=bd(x,rr);t.dt.push_back(rr);}while(x);
 	}
 	static Bint from128(i128 v){Bint t{};t.sig=v<0;put(t,v<0?0-static_cast<u128>(v):static_cast<u128>(v));return t;}
 	static bool smallu(const Bint&x,u64&v){
@@ -141,8 +148,8 @@ class Bint{
 		Z n{x.size()},m{y.size()};
 		t.dt.resize(n+1);
 		u64 c{};
-		for(Z i{0};i<m;i++){u64 s{c+static_cast<u64>(x[i])+static_cast<u64>(y[i])};c=s/E18;t.dt[i]=(s-c*E18);}
-		for(Z i{m};i<n;i++){u64 s{c+static_cast<u64>(x[i])};c=s/E18;t.dt[i]=(s-c*E18);}
+		for(Z i{0};i<m;i++){u64 s=c+x[i]+y[i];c=s/E18;t.dt[i]=(s-c*E18);}
+		for(Z i{m};i<n;i++){u64 s=c+x[i];c=s/E18;t.dt[i]=(s-c*E18);}
 		t.dt[n]=c;
 		t.reload();
 		return t;
@@ -153,18 +160,18 @@ class Bint{
 		t.dt.resize(n);
 		u64 c{};
 		Z i{};
-		for(;i<m&&i<n;i++){long long s{static_cast<long long>(a.dt[i])-static_cast<long long>(b.dt[i])-static_cast<long long>(c)};if(s<0)s+=E18,c=1;else c=0;t.dt[i]=s;}
-		for(;i<n;i++){long long s{static_cast<long long>(a.dt[i])-static_cast<long long>(c)};if(s<0)s+=E18,c=1;else c=0;t.dt[i]=s;}
+		for(;i<m&&i<n;i++){long long s=a.dt[i]-b.dt[i]-c;if(s<0)s+=E18,c=1;else c=0;t.dt[i]=s;}
+		for(;i<n;i++){long long s=a.dt[i]-c;if(s<0)s+=E18,c=1;else c=0;t.dt[i]=s;}
 		t.reload();
 		return t;
 	}
-	static Bint mul_small(const Bint&a,i128 c){Bint t{};t.dt.resize(a.dt.size()+1);i128 k{};for(Z i{0};i<a.dt.size();i++){i128 v{a.dt[i]*c+k};t.dt[i]=(v%base);k=v/base;}t.dt[a.dt.size()]=k;t.reload();return t;}
+	static Bint mul_small(const Bint&a,i128 c){Bint t{};t.dt.resize(a.dt.size()+1);i128 k{};for(Z i{0};i<a.dt.size();i++){i128 v{a.dt[i]*c+k};if(v>=0){u64 r{};u128 q{bd(v,r)};t.dt[i]=r;k=static_cast<i128>(q);}else{t.dt[i]=(v%base);k=v/base;}}t.dt[a.dt.size()]=k;t.reload();return t;}
 	static void cv(const T*a,Z n,const T*b,Z m,u128*c){
 		for(Z i{0};i<n;i++){u128 x=a[i];for(Z j{0};j<m;j++)c[i+j]+=x*b[j];}
 	}
 	static void nz(const u128*c,Z n,T*r){
 		u128 carry{};
-		for(Z i{0};i<n;i++){u128 s{c[i]+carry};r[i]=divbase(s);carry=s;}
+		for(Z i{0};i<n;i++){u64 rr{};carry=bd(c[i]+carry,rr);r[i]=rr;}
 	}
 	static V<T> sm(const T*a,Z n,const T*b,Z m){
 		Z L{n>m?n:m};
@@ -398,8 +405,8 @@ class Bint{
 			u64 c2{},br{};
 			for(Z i{0};i<m;i++){
 				u128 p{static_cast<u128>(qh)*v[i]+c2};
-				c2=p/E18;
-				u64 pl=p-c2*E18,t{u[j+i]-pl-br};
+				u64 pl{};c2=bd(p,pl);
+				u64 t{u[j+i]-pl-br};
 				br=t>>63;
 				u[j+i]=t+br*E18;
 			}
@@ -419,7 +426,7 @@ class Bint{
 		tb(q);
 		r.dt.resize(m);
 		if(d==1){for(Z i{0};i<m;i++)r.dt[i]=u[i];}
-		else{u64 g{};for(Z i{m};i--;){u128 x{static_cast<u128>(g)*E18+u[i]};u64 t=x/d;r.dt[i]=t;g=x-static_cast<u128>(t)*d;}}
+		else{u64 g{};for(Z i{m};i--;){u128 x=static_cast<u128>(g)*E18+u[i];u64 t=x/d;r.dt[i]=t;g=x-static_cast<u128>(t)*d;}}
 		tb(r);
 	}
 	static void bz(const Bint&A,const Bint&C,Bint&q,Bint&r){
@@ -460,6 +467,7 @@ class Bint{
 			if(r)r.sig=a.sig;
 			return;
 		}
+		if(C.dt.size()==1&&C.dt[0]==1){q=A;q.sig=a.sig!=b.sig;r=Bint{};return;}
 		Z m{C.dt.size()};
 		if(m<=bth)kd(A,C,q,r);
 		else{
@@ -487,7 +495,12 @@ class Bint{
 	friend Bint operator-(const Bint&a,const Bint&b){
 		i128 x{},y{};
 		if(smallv(a,x)&&smallv(b,y))return from128(x-y);
-		return a+(-b);
+		Bint t{};
+		if(a.sig!=b.sig)t=abs_add(a,b),t.sig=a.sig;
+		else if(abs_less(a,b))t=abs_sub(b,a),t.sig=!a.sig;
+		else t=abs_sub(a,b),t.sig=a.sig;
+		t.reload();
+		return t;
 	}
 	Bint&operator-=(const Bint&x){*this=*this-x;return*this;}
 	Bint&operator*=(const Bint&x){*this=*this*x;return*this;}
@@ -513,6 +526,7 @@ class Frac{
 	T a,b;
 	Frac():a{},b{1}{}
 	Frac(const T&_a,const T&_b=1):a{_a},b{_b}{simplify();}
+	Frac(T&&_a,T&&_b):a{move(_a)},b{move(_b)}{simplify();}
 	template<typename U=T,typename=std::enable_if_t<fracb_isbint<U>::value>>
 	Frac(const i128&x):a{x},b{1}{}
 	static constexpr __float128 eps=fpe<T>::v;
@@ -524,7 +538,7 @@ class Frac{
 	static T mkw(u128 v){
 		T t{};
 		t.dt.clear();
-		do{t.dt.push_back(v%static_cast<u128>(T::base));v/=static_cast<u128>(T::base);}while(v);
+		do{t.dt.push_back(v%T::base);v/=T::base;}while(v);
 		return t;
 	}
 	static u128 gw(u128 x,u128 y){
@@ -533,7 +547,7 @@ class Frac{
 	}
 	static T ed(const T&a,u128 m){
 		T t{a};u128 c{0};
-		for(Z i=t.dt.size();i--;){u128 v{c*static_cast<u128>(T::base)+static_cast<u128>(t.dt[i])};t.dt[i]=(v/m);c=v%m;}
+		for(Z i=t.dt.size();i--;){u128 v=c*T::base+t.dt[i];;t.dt[i]=(v/m);c=v%m;}
 		while(t.dt.size()>1&&!t.dt.back())t.dt.pop_back();
 		return t;
 	}
@@ -556,6 +570,14 @@ class Frac{
 		for(Z i=0;i<x.dt.size();i++){i128 v{static_cast<i128>(x.dt[i])-c-(i<y.dt.size()?static_cast<i128>(y.dt[i]):0)};if(v<0)v+=T::base,c=1;else c=0;x.dt[i]=v;}
 		while(x.dt.size()>1&&!x.dt.back())x.dt.pop_back();
 	}
+	static Frac rw(const T&_a,const T&_b){return rw(T{_a},T{_b});}
+	static Frac rw(T&&_a,const T&_b){return rw(move(_a),T{_b});}
+	static Frac rw(T&&_a,T&&_b){
+		Frac t{};t.a=move(_a);t.b=move(_b);
+		if(t.b.sig)t.a=-t.a,t.b=-t.b;
+		if(!t.a)t.b=T{1};
+		return t;
+	}
 	static T bg2(T x,T y){
 		Z z{0},w{0};
 		while(!(x.dt[0]&1)){hl(x);z++;}
@@ -563,6 +585,30 @@ class Frac{
 		if(z>w)z=w;
 		for(;;){if(T::abs_less(x,y))std::swap(x,y);if(x.dt==y.dt)break;sb(x,y);while(!(x.dt[0]&1))hl(x);}
 		while(z--)dl(x);return x;
+	}
+	static u128 h2(const T&x,Z k){
+		u128 v{};
+		if(k<x.dt.size())v=x.dt[k];
+		if(k+1<x.dt.size())v+=x.dt[k+1]*T::base;
+		return v;
+	}
+	static i128 ab(i128 x){return x<0?-x:x;}
+	static void a2(const T&x,i128 a,const T&y,i128 b,i128 c,i128 d,T&r1,T&r2){
+		Z n{x.dt.size()>y.dt.size()?x.dt.size():y.dt.size()};
+		r1.dt.resize(n+1);r2.dt.resize(n+1);
+		i128 k1{},k2{};
+		for(Z i{0};i<n;i++){
+			i128 s1{k1},s2{k2};
+			if(i<x.dt.size())s1+=a*x.dt[i],s2+=c*x.dt[i];
+			if(i<y.dt.size())s1+=b*y.dt[i],s2+=d*y.dt[i];
+			u64 r{};
+			if(s1>=0){u128 q{T::bd(s1,r)};k1=q;r1.dt[i]=r;}
+			else{u128 q{T::bd(-s1,r)};if(r)k1=-static_cast<i128>(q)-1,r1.dt[i]=E18-r;else k1=-static_cast<i128>(q),r1.dt[i]=0;}
+			if(s2>=0){u128 q{T::bd(s2,r)};k2=q;r2.dt[i]=r;}
+			else{u128 q{T::bd(-s2,r)};if(r)k2=-static_cast<i128>(q)-1,r2.dt[i]=E18-r;else k2=-static_cast<i128>(q),r2.dt[i]=0;}
+		}
+		r1.dt[n]=k1;r2.dt[n]=k2;
+		r1.reload();r2.reload();
 	}
 	static T gcd(T x,T y){
 		if constexpr(fpt<T>){
@@ -576,13 +622,33 @@ class Frac{
 				if(T::abs_less(x,y))std::swap(x,y);
 				if(!y)return x;
 				if(y.dt.size()==1){
-					u128 m{static_cast<u128>(y.dt[0])},r{0};if(m<2)return mkw(1);
-					for(Z i=x.dt.size();i--;)r=(r*static_cast<u128>(T::base)+static_cast<u128>(x.dt[i]))%m;
+					u128 m=y.dt[0],r=0;if(m<2)return mkw(1);
+					for(Z i=x.dt.size();i--;)r=(r*T::base+x.dt[i])%m;
 					return mkw(gw(r,m));
 				}
-				if(x.dt.size()<=2)return mkw(gw(wd(x),wd(y)));
-				if(x.dt.size()<=4)return bg2(x,y);
-				T r{x%y};x=y;y=r;
+				if(x.dt.size()<=4)return bg2(move(x),move(y));
+				Z n{x.dt.size()},m{y.dt.size()};
+				if(n>m+1){x%=y;continue;}
+				Z k{n-2};
+				u128 u{h2(x,k)},v{h2(y,k)};
+				i128 A{1},B{},C{},D{1};
+				Z st{};
+				const i128 L{E18};
+				while(v){
+					u128 q{1},t{u-v};
+					while(t>=v&&q<8)t-=v,q++;
+					if(t>=v)q=u/v;
+					if(q>L)break;
+					i128 qq{static_cast<i128>(q)},A2{A-qq*C},B2{B-qq*D};
+					if(A2>L||A2<-L||B2>L||B2<-L)break;
+					u128 R{u-qq*v},ca{static_cast<u128>(ab(C))+static_cast<u128>(ab(D))},ea{static_cast<u128>(ab(A2))+static_cast<u128>(ab(B2))};
+					if(v<=ca||R<=ea||v-R<=ca+ea)break;
+					A=C;B=D;C=A2;D=B2;u=v;v=R;st++;
+				}
+				if(!st){x%=y;continue;}
+				T nx{},ny{};
+				a2(x,A,y,B,C,D,nx,ny);
+				x=move(nx);y=move(ny);
 			}
 		}else{
 			if(x<0)x=-x;
@@ -608,24 +674,39 @@ class Frac{
 	}
 	explicit operator bool()const{return !!a;}
 	static Frac qt(const T&p,const T&q,const T&r,const T&s){
+		if(q.dt==s.dt)return rw(p*r,q*s);
 		T g{gcd(p,s)};
-		if(g>1){T h{gcd(r,q)};if(h>1)return{dv(p,g)*dv(r,h),dv(q,h)*dv(s,g)};return{dv(p,g)*r,q*dv(s,g)};}
+		if(g>1){T h{gcd(r,q)};if(h>1)return rw(dv(p,g)*dv(r,h),dv(q,h)*dv(s,g));return rw(dv(p,g)*r,q*dv(s,g));}
 		T h{gcd(r,q)};
-		if(h>1)return{p*dv(r,h),dv(q,h)*s};
-		return{p*r,q*s};
+		if(h>1)return rw(p*dv(r,h),dv(q,h)*s);
+		return rw(p*r,q*s);
 	}
 	static Frac ad(const Frac&x,const Frac&y,bool m){
 		if constexpr(fracb_isbint<T>::value){
+			if(x.b.dt==y.b.dt){
+				T n{m?x.a-y.a:x.a+y.a};
+				if(!n)return Frac{};
+				T h{gcd(n,x.b)};
+				if(h>1)return rw(dv(n,h),dv(x.b,h));
+				return rw(move(n),x.b);
+			}
 			if(x.b.dt.size()+y.b.dt.size()>=3&&x.b&&y.b){
 				T g{gcd(x.b,y.b)};
-				if(g>1){T g1{dv(x.b,g)},g2{dv(y.b,g)};return{m?x.a*g2-y.a*g1:x.a*g2+y.a*g1,g1*y.b};}
+				if(g>1){
+					T g1{dv(x.b,g)},g2{dv(y.b,g)};
+					T n{m?x.a*g2-y.a*g1:x.a*g2+y.a*g1};
+					T h{gcd(n,g)};
+					if(h>1)return rw(dv(n,h),dv(g1*y.b,h));
+					return rw(n,g1*y.b);
+				}
+				return rw(m?x.a*y.b-y.a*x.b:x.a*y.b+y.a*x.b,x.b*y.b);
 			}
 		}
 		return{m?x.a*y.b-y.a*x.b:x.a*y.b+y.a*x.b,x.b*y.b};
 	}
 	friend Frac operator+(const Frac&x,const Frac&y){return ad(x,y,0);}
 	friend Frac operator-(const Frac&x,const Frac&y){return ad(x,y,1);}
-	friend Frac operator-(const Frac&x){return{-x.a,x.b};}
+	friend Frac operator-(const Frac&x){return rw(-x.a,x.b);}
 	friend Frac operator*(const Frac&x,const Frac&y){
 		if constexpr(fracb_isbint<T>::value)if(x.a.dt.size()+y.a.dt.size()>=5)return qt(x.a,x.b,y.a,y.b);
 		return{x.a*y.a,x.b*y.b};
@@ -662,9 +743,19 @@ class Poly{
 	Poly(const V<T>&_dt):dt{_dt}{}
 	Poly(std::initializer_list<T>_dt):dt{_dt}{}
 	Poly(const T&t):dt{t}{}
+	template<typename U>requires std::is_constructible_v<T,U>
+	Poly(const U&x):dt{T(x)}{}
+	template<typename A,typename B>requires std::is_constructible_v<T,A>&&std::is_constructible_v<T,B>
+	Poly(const A&a,const B&b):dt{T(a),T(b)}{}
 	static constexpr __float128 eps=fpe<T>::v;
-	static bool zero(const T&x){if constexpr(cxt<T>::value)return fpf::cabs(x)<eps;else if constexpr(fpt<T>)return fpf::abs(x)<eps;else return !x;}
-	static bool eq(const T&a,const T&b){if constexpr(cxt<T>::value)return fpf::cabs(a-b)<eps;if constexpr(is_same_v<T,__float128>)return fpf::eq(a,b,eps);if constexpr(fpt<T>)return fpf::abs(a-b)<eps;return a==b;}
+	template<typename A>
+	static bool zq(const A&x){
+		using U=typename A::value_type;
+		if constexpr(fpt<U>)return fpf::cabs(x)<eps;
+		return x==A{};
+	}
+	static bool zero(const T&x){if constexpr(cxt<T>::value)return zq(x);else if constexpr(fpt<T>)return fpf::abs(x)<eps;else return !x;}
+	static bool eq(const T&a,const T&b){if constexpr(cxt<T>::value)return zq(a-b);if constexpr(is_same_v<T,__float128>)return fpf::eq(a,b,eps);if constexpr(fpt<T>)return fpf::abs(a-b)<eps;return a==b;}
 	void reload(){while(!dt.empty()&&zero(dt.back()))dt.pop_back();if(dt.empty())dt.push_back({});}
 	T operator()(T x)const{T r{};for(Z i=dt.size();i--;)r=r*x+dt[i];return r;}
 	template<typename A>
@@ -723,6 +814,20 @@ class Poly{
 			while(sz>1&&zero(r[sz-1]))sz--;
 		}
 	}
+	static void pmod(const V<T>&a,const V<T>&b,V<T>&r){
+		Z m{b.size()},sz{a.size()};
+		r=a;
+		while(sz>=m&&(sz>1||!zero(r[0]))){
+			Z sh{sz-m};
+			T c{r[sz-1]/b[m-1]};
+			if constexpr(pex<T>::v){
+				for(Z i=0;i+1<m;i++){T&ri{r[sh+i]};auto cb{c.b*b[i].b};ri=T{ri.a*cb-c.a*b[i].a*ri.b,ri.b*cb};}
+				r[sh+m-1]=T{};
+			}else for(Z i=0;i<m;i++)r[sh+i]-=c*b[i];
+			while(sz>1&&zero(r[sz-1]))sz--;
+		}
+		r.resize(sz);
+	}
 	friend Poly operator+(const Poly&a,const Poly&b){
 		Poly t{};
 		t.dt.resize(std::max(a.dt.size(),b.dt.size()));
@@ -761,7 +866,12 @@ class Poly{
 	friend Poly operator/(const Poly&a,const Poly&b){Poly t{a};t/=b;return t;}
 	Poly&operator/=(const Poly&b){Poly t{};pdiv(dt,b.dt,t.dt);dt.swap(t.dt);reload();return *this;}
 	friend Poly operator%(const Poly&a,const Poly&b){Poly t{a};t%=b;return t;}
-	Poly&operator%=(const Poly&b){*this-=*this/b*b;reload();return *this;}
+	Poly&operator%=(const Poly&b){
+		if constexpr(pex<T>::v){V<T>r{};pmod(dt,b.dt,r);dt.swap(r);}
+		else *this-=*this/b*b;
+		reload();
+		return *this;
+	}
 	friend bool operator<(const Poly&a,const Poly&b){
 		Poly x{a},y{b};
 		x.reload();y.reload();
@@ -890,7 +1000,7 @@ namespace std{
 }
 FPTP
 Poly<T>Deri(Poly<T>p){
-	if(p.dt.size()==1){p.dt[0]={};return p;}
+	if(p.dt.size()==1){p.dt[0]=T{};return p;}
 	if constexpr(pex<T>::v){
 		using A=typename pex<T>::type;
 		for(Z i=1;i<p.dt.size();i++)p.dt[i-1]=T{p.dt[i].a*A(i),p.dt[i].b};
@@ -906,7 +1016,7 @@ Poly<T>inter(Poly<T>p){
 		using A=typename pex<T>::type;
 		for(Z i=p.dt.size()-1;i--;)p.dt[i+1]=T{p.dt[i].a,p.dt[i].b*A(i+1)};
 	}else for(Z i=p.dt.size()-1;i--;)p.dt[i+1]=p.dt[i]/T(i+1);
-	p.dt[0]={};
+	p.dt[0]=T{};
 	p.reload();
 	return p;
 }

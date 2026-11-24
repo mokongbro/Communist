@@ -60,7 +60,9 @@ FPTP T num(const string&s){
 }
 }
 FPTP WO operator<=>(const cx<T>&a,const cx<T>&b){
-	T x{fpf::cabs(a)},y{fpf::cabs(b)};
+	T x{},y{};
+	if constexpr(fpt<T>)x=fpf::cabs(a),y=fpf::cabs(b);
+	else x=a.real()*a.real()+a.imag()*a.imag(),y=b.real()*b.real()+b.imag()*b.imag();
 	return x<y?WO::less:x>y?WO::greater:WO::equivalent;
 }
 FPTP WO operator<=>(const cx<T>&a,const typename cx<T>::value_type&b){return a<=>cx<T>{b};}
@@ -571,6 +573,7 @@ class Frac{
 			while(y){T t{fpf::mod(x,y)};x=y;y=t;}
 			return x;
 		}else if constexpr(fracb_isbint<T>::value){
+			x.sig=0;y.sig=0;
 			for(;;){
 				if(T::abs_less(x,y))std::swap(x,y);
 				if(!y)return x;
@@ -660,9 +663,19 @@ class Poly{
 	Poly(const V<T>&_dt):dt{_dt}{}
 	Poly(std::initializer_list<T>_dt):dt{_dt}{}
 	Poly(const T&t):dt{t}{}
+	template<typename U>requires std::is_constructible_v<T,U>
+	Poly(const U&x):dt{T(x)}{}
+	template<typename A,typename B>requires std::is_constructible_v<T,A>&&std::is_constructible_v<T,B>
+	Poly(const A&a,const B&b):dt{T(a),T(b)}{}
 	static constexpr __float128 eps=fpe<T>::v;
-	static bool zero(const T&x){if constexpr(cxt<T>::value)return fpf::cabs(x)<eps;else if constexpr(fpt<T>)return fpf::abs(x)<eps;else return !x;}
-	static bool eq(const T&a,const T&b){if constexpr(cxt<T>::value)return fpf::cabs(a-b)<eps;if constexpr(is_same_v<T,__float128>)return fpf::eq(a,b,eps);if constexpr(fpt<T>)return fpf::abs(a-b)<eps;return a==b;}
+	template<typename A>
+	static bool zq(const A&x){
+		using U=typename A::value_type;
+		if constexpr(fpt<U>)return fpf::cabs(x)<eps;
+		return x==A{};
+	}
+	static bool zero(const T&x){if constexpr(cxt<T>::value)return zq(x);else if constexpr(fpt<T>)return fpf::abs(x)<eps;else return !x;}
+	static bool eq(const T&a,const T&b){if constexpr(cxt<T>::value)return zq(a-b);if constexpr(is_same_v<T,__float128>)return fpf::eq(a,b,eps);if constexpr(fpt<T>)return fpf::abs(a-b)<eps;return a==b;}
 	void reload(){while(!dt.empty()&&zero(dt.back()))dt.pop_back();if(dt.empty())dt.push_back({});}
 	T operator()(T x)const{T r{};for(Z i=dt.size();i--;)r=r*x+dt[i];return r;}
 	template<typename A>
@@ -887,7 +900,7 @@ namespace std{
 }
 FPTP
 Poly<T>Deri(Poly<T>p){
-	if(p.dt.size()==1){p.dt[0]={};return p;}
+	if(p.dt.size()==1){p.dt[0]=T{};return p;}
 	if constexpr(pex<T>::v){
 		using A=typename pex<T>::type;
 		for(Z i=1;i<p.dt.size();i++)p.dt[i-1]=T{p.dt[i].a*A(i),p.dt[i].b};
@@ -903,7 +916,7 @@ Poly<T>inter(Poly<T>p){
 		using A=typename pex<T>::type;
 		for(Z i=p.dt.size()-1;i--;)p.dt[i+1]=T{p.dt[i].a,p.dt[i].b*A(i+1)};
 	}else for(Z i=p.dt.size()-1;i--;)p.dt[i+1]=p.dt[i]/T(i+1);
-	p.dt[0]={};
+	p.dt[0]=T{};
 	p.reload();
 	return p;
 }
